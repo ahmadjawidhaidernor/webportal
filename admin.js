@@ -1,6 +1,6 @@
-const SUPABASE_URL = 'https://pxdhqwiztigwqzrzummo.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_pVDRTFYOulR0QuQ1lcl9MA_vEYBr00-';
-const ADMIN_EMAIL = 'admin@gmail.com';
+const SUPABASE_URL = 'https://bqnhimiskwqnhrstsxld.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxbmhpbWlza3dxbmhyc3RzeGxkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE5ODIxNzksImV4cCI6MjEwNzU1ODE3OX0.twH1OA1LzRWbTW3oKXRnI6ABMrWTZVXN8LdRMXU7dBk';
+const ADMIN_EMAIL = 'ahmadjawidhaidernor@gmail.com';
 
 const supabaseClient = window.supabase && typeof window.supabase.createClient === 'function'
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)

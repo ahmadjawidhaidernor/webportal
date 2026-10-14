@@ -19,8 +19,8 @@ drop policy if exists "Admin can manage lesson_videos" on public.lesson_videos;
 create policy "Admin can manage lesson_videos"
 on public.lesson_videos for all
 to authenticated
-using ((auth.jwt() ->> 'email') = 'admin@gmail.com')
-with check ((auth.jwt() ->> 'email') = 'admin@gmail.com');
+using ((auth.jwt() ->> 'email') = 'ahmadjawidhaidernor@gmail.com')
+with check ((auth.jwt() ->> 'email') = 'ahmadjawidhaidernor@gmail.com');
 
 alter table public.lessons drop column if exists video_url;
 
@@ -71,7 +71,7 @@ using (
     select 1
     from public.profiles p
     where p.id = auth.uid()
-      and lower(p.email) = 'admin@gmail.com'
+      and lower(p.email) = 'ahmadjawidhaidernor@gmail.com'
   )
 );
 
