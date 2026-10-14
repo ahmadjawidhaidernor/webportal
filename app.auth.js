@@ -71,9 +71,9 @@ let portalToastTimeout = null;
 
 const fallbackLessons = [
   {
-    title: "Variables and data types",
+    title: "HTML and CSS foundations",
     lesson_number: 1,
-    description: "An introduction to variables, strings, numbers, and booleans in JavaScript.",
+    description: "An introduction to HTML structure, CSS styling, and responsive layouts.",
     file_url: [
       {
         name: "lesson-01.pdf",
@@ -612,7 +612,7 @@ function renderLessonProgress(viewedCount, totalLessons) {
   const safeViewed = Number.isFinite(viewedCount) ? Math.max(viewedCount, 0) : 0;
   const percentage = safeTotal > 0 ? Math.min((safeViewed / safeTotal) * 100, 100) : 0;
 
-  progressSummary.textContent = `${safeViewed} / ${safeTotal} lessons`;
+  progressSummary.textContent = `${safeViewed} of ${safeTotal} lessons`;
   progressFill.style.width = `${percentage}%`;
 
   if (safeTotal === 0) {
@@ -624,7 +624,7 @@ function renderLessonProgress(viewedCount, totalLessons) {
   if (safeViewed === 0) {
     progressText.textContent = "You have not started yet.";
   } else {
-    progressText.textContent = `You've completed ${safeViewed} / ${safeTotal} lessons 🎉`;
+    progressText.textContent = `You've completed ${safeViewed} of ${safeTotal} lessons`;
   }
 
   studentStatusSection.hidden = false;

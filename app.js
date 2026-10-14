@@ -22,9 +22,9 @@ const supabaseClient =
 
 const fallbackLessons = [
   {
-    title: "Variables and data types",
+    title: "HTML and CSS foundations",
     lesson_number: 1,
-    description: "An introduction to variables, strings, numbers, and booleans in JavaScript.",
+    description: "An introduction to HTML structure, CSS styling, and responsive layouts.",
     file_url: "https://example.com/lesson-01.pdf",
     created_at: "2026-07-10T08:00:00.000Z"
   }
