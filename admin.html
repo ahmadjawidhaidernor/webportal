@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>Admin Panel</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css?v=1.0.5" />
+  </head>
+  <body>
+    <div class="admin-shell">
+      <header class="hero hero--compact">
+        <div class="hero__content">
+          <div class="hero__top">
+            <div class="hero__brand">
+              <img class="hero__brand-logo" src="images/Logo.png" alt="HunarX logo" />
+              <div>
+                <p class="hero__eyebrow">Admin Panel</p>
+                <h1>Lesson management</h1>
+              </div>
+            </div>
+            <div class="hero__actions">
+              <a class="hero__link" href="index.html">Student portal</a>
+              <button id="logoutBtn" class="hero__logout hero__logout--small" type="button">Log out</button>
+            </div>
+          </div>
+          <p class="hero__subtitle">
+            Upload lessons, manage file metadata, and keep the portal content up to date.
+          </p>
+        </div>
+      </header>
+
+      <main class="admin-panel">
+        <section id="authSection" class="auth-card">
+          <p class="auth-card__eyebrow">Admin access</p>
+          <h2>Sign in</h2>
+          <p class="auth-card__subtitle">
+            Use the same Supabase account that you want to authorize as the portal administrator.
+          </p>
+          <form id="adminAuthForm" class="auth-form">
+            <div class="auth-form__field">
+              <label for="adminEmailInput">Email</label>
+              <input id="adminEmailInput" name="email" type="email" required />
+            </div>
+            <div class="auth-form__field">
+              <label for="adminPasswordInput">Password</label>
+              <input id="adminPasswordInput" name="password" type="password" required />
+            </div>
+            <div id="adminAuthMessage" class="auth-form__message" role="alert"></div>
+            <button class="auth-form__submit" type="submit">Sign in</button>
+          </form>
+        </section>
+
+        <section id="adminContent" class="admin-panel" hidden>
+          <nav class="portal-tabs admin-tabs" role="tablist" aria-label="Admin sections">
+            <button class="portal-tab portal-tab--active" data-admin-tab="lessons" type="button">Lessons</button>
+            <button class="portal-tab" data-admin-tab="videos" type="button">Recorded Lessons</button>
+            <button class="portal-tab" data-admin-tab="activity" type="button">Activity</button>
+            <button class="portal-tab" data-admin-tab="announcements" type="button">Announcements</button>
+          </nav>
+
+          <section id="adminLessonsSection">
+          <div class="admin-grid">
+            <div class="admin-card">
+              <h2>Upload lesson</h2>
+              <p class="admin-help">
+                Add a lesson file, choose the session number, and save the public URL for students.
+              </p>
+              <form id="uploadForm" class="admin-form">
+                <div class="admin-form__field">
+                  <label for="lessonTitleInput">Lesson title</label>
+                  <input id="lessonTitleInput" name="lessonTitle" type="text" required />
+                </div>
+                <div class="admin-form__field">
+                  <label for="sessionNumberInput">Session number</label>
+                  <input id="sessionNumberInput" name="sessionNumber" type="number" min="1" required />
+                </div>
+                <div class="admin-form__field">
+                  <label for="lessonDescriptionInput">Short description</label>
+                  <textarea id="lessonDescriptionInput" name="lessonDescription" rows="3"></textarea>
+                </div>
+                <div class="admin-form__field">
+                  <label for="lessonCategoryInput">Category / Tag</label>
+                  <select id="lessonCategoryInput" name="lessonCategory" required>
+                    <option value="Lesson Materials" selected>Lesson Materials</option>
+                    <option value="Project">Project</option>
+                    <option value="Slide">Slide</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+                <div id="uploadMessage" class="auth-form__message" role="status"></div>
+                <div class="admin-form__field">
+                  <label for="lessonDateInput">Date</label>
+                  <input id="lessonDateInput" name="lessonDate" type="date" required />
+                </div>
+                <div class="admin-form__field">
+                  <label for="lessonFileInput">Files</label>
+                  <input id="lessonFileInput" name="lessonFile" type="file" multiple required />
+                </div>
+                <button class="admin-form__submit" type="submit">Upload lesson</button>
+              </form>
+            </div>
+
+            <div class="admin-card">
+              <h2>Edit lesson</h2>
+              <p class="admin-help">
+                Select a lesson from the list to change its title, description, or session number.
+              </p>
+              <form id="editForm" class="admin-form" hidden>
+                <div class="admin-form__field">
+                  <label for="editTitleInput">Lesson title</label>
+                  <input id="editTitleInput" name="editTitle" type="text" required />
+                </div>
+                <div class="admin-form__field">
+                  <label for="editSessionInput">Session number</label>
+                  <input id="editSessionInput" name="editSession" type="number" min="1" required />
+                </div>
+                <div class="admin-form__field">
+                  <label for="editDescriptionInput">Description</label>
+                  <textarea id="editDescriptionInput" name="editDescription" rows="3"></textarea>
+                </div>
+                <div class="admin-form__field">
+                  <label for="editCategoryInput">Category / Tag</label>
+                  <select id="editCategoryInput" name="editCategory" required>
+                    <option value="Lesson Materials">Lesson Materials</option>
+                    <option value="Project">Project</option>
+                    <option value="Slide">Slide</option>
+                    <option value="General">General</option>
+                  </select>
+                </div>
+                <div id="editMessage" class="auth-form__message" role="status"></div>
+                <div class="admin-form__field">
+                  <label for="editLessonFileInput">Replace file</label>
+                  <input id="editLessonFileInput" name="editLessonFile" type="file" multiple />
+                </div>
+                <div class="admin-actions">
+                  <button class="admin-form__submit" type="submit">Save changes</button>
+                  <button class="admin-cancel-btn" id="cancelEditBtn" type="button">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <section class="admin-card admin-table-card">
+            <div class="admin-table-header">
+              <h2>Uploaded lessons</h2>
+              <p class="admin-table-meta">Newest lessons appear first.</p>
+            </div>
+            <div class="admin-table-wrapper">
+              <table class="admin-table">
+                <thead>
+                  <tr>
+                    <th>Title</th>
+                    <th>Session</th>
+                    <th>Category</th>
+                    <th>Date</th>
+                    <th>File</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="lessonsTableBody"></tbody>
+              </table>
+            </div>
+          </section>
+          </section>
+
+          <section id="recordedLessonsSection" class="admin-card" hidden>
+            <div class="admin-table-header">
+              <div>
+                <h2>Recorded Lessons</h2>
+                <p class="admin-table-meta">Add and manage multiple videos for each lesson.</p>
+              </div>
+            </div>
+            <form id="videoForm" class="admin-form admin-inline-form">
+              <div class="admin-form__field">
+                <label for="videoLessonInput">Lesson</label>
+                <select id="videoLessonInput" required></select>
+              </div>
+              <div class="admin-form__field">
+                <label for="videoTitleInput">Video Title</label>
+                <input id="videoTitleInput" type="text" placeholder="Part 1 - Basics" required />
+              </div>
+              <div class="admin-form__field">
+                <label for="videoUrlInput">YouTube Link</label>
+                <input id="videoUrlInput" type="url" placeholder="https://youtube.com/watch?v=XXXXXXXXXXX" required />
+              </div>
+              <div id="videoMessage" class="auth-form__message" role="status"></div>
+              <button class="admin-form__submit" type="submit">Add recorded lesson</button>
+            </form>
+            <div id="videosList" class="admin-video-groups"></div>
+          </section>
+
+          <section id="activitySection" class="admin-card" hidden>
+            <div class="admin-table-header">
+              <h2>Activity</h2>
+              <p class="admin-table-meta">Student logins, lesson views, and downloads.</p>
+            </div>
+            <div id="activityMessage" class="auth-form__message" role="status"></div>
+            <div class="admin-grid">
+              <div class="admin-card admin-card--subtle">
+                <h3>Most recent student logins</h3>
+                <ul id="activityStudentsList" class="admin-activity-list"></ul>
+              </div>
+              <div class="admin-card admin-card--subtle">
+                <h3>Lesson activity overview</h3>
+                <ul id="activityLessonsList" class="admin-activity-list"></ul>
+              </div>
+            </div>
+          </section>
+
+          <section id="announcementsSection" class="admin-card" hidden>
+            <div class="admin-table-header">
+              <h2>Announcements</h2>
+              <p class="admin-table-meta">Post updates for students and remove outdated notices.</p>
+            </div>
+            <form id="announcementForm" class="admin-form admin-inline-form">
+              <div class="admin-form__field">
+                <label for="announcementTitleInput">Title</label>
+                <input id="announcementTitleInput" type="text" placeholder="New update" required />
+              </div>
+              <div class="admin-form__field">
+                <label for="announcementMessageInput">Message</label>
+                <textarea id="announcementMessageInput" rows="4" placeholder="Share something important with students..." required></textarea>
+              </div>
+              <div id="announcementMessage" class="auth-form__message" role="status"></div>
+              <button class="admin-form__submit" type="submit">Post Announcement</button>
+            </form>
+            <div id="announcementsList" class="admin-announcements-list"></div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <footer class="site-footer">
+      <span>Built by <a href="https://www.hunarx.com" target="_blank" rel="noopener noreferrer">HunarX</a></span>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="admin.js?v=1.0.5"></script>
+  </body>
+</html>
