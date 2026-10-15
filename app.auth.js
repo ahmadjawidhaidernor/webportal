@@ -66,6 +66,8 @@ let allLessons = [];
 let allLessonVideos = [];
 let currentAnnouncements = [];
 let announcementEngagement = new Map();
+let animatingAnnouncementLikes = new Set();
+let announcementLikeMutationVersion = 0;
 let announcementCommentCounts = new Map();
 let announcementComments = new Map();
 let expandedAnnouncementComments = new Set();
@@ -728,13 +730,19 @@ function renderAnnouncements(announcements) {
       <p class="announcement-card__body">${escapeHtml(announcement.message || "")}</p>
       <div class="announcement-card__engagement">
         <button
-          class="announcement-card__social-button${announcementEngagement.get(String(announcement.id))?.liked ? " announcement-card__social-button--liked" : ""}"
+          class="announcement-card__like-button${announcementEngagement.get(String(announcement.id))?.liked ? " announcement-card__like-button--liked" : ""}${animatingAnnouncementLikes.has(String(announcement.id)) ? " announcement-card__like-button--animating" : ""}"
           type="button"
           data-announcement-action="like"
           data-announcement-id="${announcement.id}"
+          aria-label="${announcementEngagement.get(String(announcement.id))?.liked ? "Unlike" : "Like"}"
           aria-pressed="${announcementEngagement.get(String(announcement.id))?.liked ? "true" : "false"}"
           ${busyAnnouncementLikes.has(String(announcement.id)) ? "disabled" : ""}
-        >${announcementEngagement.get(String(announcement.id))?.liked ? "Liked" : "Like"} (${announcementEngagement.get(String(announcement.id))?.count || 0})</button>
+        >
+          <svg class="announcement-card__heart" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"></path>
+          </svg>
+          <span class="announcement-card__like-count">${announcementEngagement.get(String(announcement.id))?.count || 0}</span>
+        </button>
         <button
           class="announcement-card__social-button"
           type="button"
@@ -800,7 +808,8 @@ function renderAnnouncementComments(announcement) {
 
 async function loadAnnouncementEngagement(announcements) {
   const ids = (announcements || []).map((announcement) => announcement.id);
-  announcementEngagement = new Map(ids.map((id) => [String(id), { count: 0, liked: false }]));
+  const engagementByAnnouncement = new Map(ids.map((id) => [String(id), { count: 0, liked: false }]));
+  const likeMutationVersion = announcementLikeMutationVersion;
   announcementCommentCounts = new Map(ids.map((id) => [String(id), 0]));
   if (!ids.length || !supabaseClient) return;
 
@@ -818,13 +827,22 @@ async function loadAnnouncementEngagement(announcements) {
   if (likesResult.error) throw likesResult.error;
   if (commentsResult.error) throw commentsResult.error;
 
+  const likedStudentsByAnnouncement = new Map(ids.map((id) => [String(id), new Set()]));
   (likesResult.data || []).forEach((like) => {
     const key = String(like.announcement_id);
-    const engagement = announcementEngagement.get(key);
-    if (!engagement) return;
-    engagement.count += 1;
+    const engagement = engagementByAnnouncement.get(key);
+    const likedStudents = likedStudentsByAnnouncement.get(key);
+    if (!engagement || !likedStudents) return;
+    likedStudents.add(like.student_id);
     if (like.student_id === currentStudentId) engagement.liked = true;
   });
+  likedStudentsByAnnouncement.forEach((likedStudents, key) => {
+    const engagement = engagementByAnnouncement.get(key);
+    if (engagement) engagement.count = likedStudents.size;
+  });
+  if (likeMutationVersion === announcementLikeMutationVersion && !busyAnnouncementLikes.size) {
+    announcementEngagement = engagementByAnnouncement;
+  }
   (commentsResult.data || []).forEach(({ announcement_id: id }) => {
     const key = String(id);
     if (announcementCommentCounts.has(key)) {
@@ -1382,12 +1400,15 @@ async function toggleAnnouncementLike(announcementId) {
   const key = String(announcementId);
   if (busyAnnouncementLikes.has(key)) return;
 
+  announcementLikeMutationVersion += 1;
   const engagement = announcementEngagement.get(key) || { count: 0, liked: false };
   const previous = { ...engagement };
   const shouldLike = !engagement.liked;
   engagement.liked = shouldLike;
   engagement.count = Math.max(0, engagement.count + (shouldLike ? 1 : -1));
   announcementEngagement.set(key, engagement);
+  animatingAnnouncementLikes.add(key);
+  window.setTimeout(() => animatingAnnouncementLikes.delete(key), 300);
   busyAnnouncementLikes.add(key);
   renderAnnouncements(currentAnnouncements);
 
@@ -1406,6 +1427,7 @@ async function toggleAnnouncementLike(announcementId) {
     showPortalToast("Unable to update your like. Please try again.");
   } finally {
     busyAnnouncementLikes.delete(key);
+    announcementLikeMutationVersion += 1;
     renderAnnouncements(currentAnnouncements);
   }
 }

@@ -54,6 +54,7 @@ let lessons = [];
 let lessonVideos = [];
 let announcements = [];
 let announcementLikeCounts = new Map();
+let announcementLikedBy = new Map();
 let announcementComments = new Map();
 let editingLessonId = null;
 let currentUser = null;
@@ -375,6 +376,9 @@ function renderAnnouncementsList() {
         <span aria-hidden="true">•</span>
         Comments: ${(announcementComments.get(String(announcement.id)) || []).length}
       </p>
+      <p class="admin-announcement-item__liked-by">
+        Liked by: ${(announcementLikedBy.get(String(announcement.id)) || []).map((name) => escapeHtml(name)).join(', ') || 'No one yet'}
+      </p>
       <div class="admin-announcement-comments">
         ${(announcementComments.get(String(announcement.id)) || []).length
           ? announcementComments.get(String(announcement.id)).map((comment) => `
@@ -407,13 +411,14 @@ async function loadAnnouncements() {
     announcements = data || [];
     const announcementIds = announcements.map((announcement) => announcement.id);
     announcementLikeCounts = new Map(announcementIds.map((id) => [String(id), 0]));
+    announcementLikedBy = new Map(announcementIds.map((id) => [String(id), []]));
     announcementComments = new Map(announcementIds.map((id) => [String(id), []]));
 
     if (announcementIds.length) {
       const [likesResult, commentsResult] = await Promise.all([
         supabaseClient
           .from('announcement_likes')
-          .select('announcement_id')
+          .select('announcement_id, student_id')
           .in('announcement_id', announcementIds),
         supabaseClient
           .from('announcement_comments')
@@ -424,10 +429,26 @@ async function loadAnnouncements() {
       if (likesResult.error) throw likesResult.error;
       if (commentsResult.error) throw commentsResult.error;
 
-      (likesResult.data || []).forEach(({ announcement_id: id }) => {
+      const likes = likesResult.data || [];
+      const studentIds = [...new Set(likes.map((like) => like.student_id).filter(Boolean))];
+      let profileNames = new Map();
+      if (studentIds.length) {
+        const { data: profiles, error: profilesError } = await supabaseClient
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', studentIds);
+        if (profilesError) throw profilesError;
+        profileNames = new Map((profiles || []).map((profile) => [
+          profile.id,
+          profile.full_name?.trim() || profile.email || 'Student'
+        ]));
+      }
+
+      likes.forEach(({ announcement_id: id, student_id: studentId }) => {
         const key = String(id);
         if (announcementLikeCounts.has(key)) {
           announcementLikeCounts.set(key, announcementLikeCounts.get(key) + 1);
+          announcementLikedBy.get(key).push(profileNames.get(studentId) || 'Student');
         }
       });
       (commentsResult.data || []).forEach((comment) => {
