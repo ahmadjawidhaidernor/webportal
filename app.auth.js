@@ -52,12 +52,13 @@ const lessonProgressCard = document.getElementById("lessonProgressCard");
 const progressSummary = document.getElementById("progressSummary");
 const progressFill = document.getElementById("progressFill");
 const progressText = document.getElementById("progressText");
+const designAnnouncement = document.getElementById("designAnnouncement");
 const studentAnnouncements = document.getElementById("studentAnnouncements");
+const announcementsSection = document.getElementById("announcementsSection");
 const portalTabs = Array.from(document.querySelectorAll(".portal-tab"));
 
 const STORAGE_THEME_KEY = "jsPortalTheme";
 const STORAGE_DOWNLOADED_KEY = "jsPortalDownloadedFiles";
-const STORAGE_DISMISSED_ANNOUNCEMENTS_KEY = "jsPortalDismissedAnnouncements";
 let authMode = "login";
 let currentStudentId = null;
 let currentStudentEmail = "";
@@ -65,10 +66,12 @@ let currentStudentFullName = "";
 let allLessons = [];
 let allLessonVideos = [];
 let currentAnnouncements = [];
+let hasLoadedAnnouncements = false;
 let announcementEngagement = new Map();
 let animatingAnnouncementLikes = new Set();
 let announcementLikeMutationVersion = 0;
 let announcementCommentCounts = new Map();
+let announcementCommentMutationVersion = 0;
 let announcementComments = new Map();
 let expandedAnnouncementComments = new Set();
 let busyAnnouncementLikes = new Set();
@@ -77,7 +80,6 @@ let busyAnnouncementComments = new Set();
 let activeCategory = "All";
 let activeTab = "lessons";
 let downloadedFiles = new Set(JSON.parse(localStorage.getItem(STORAGE_DOWNLOADED_KEY) || "[]"));
-let dismissedAnnouncements = new Set(JSON.parse(localStorage.getItem(STORAGE_DISMISSED_ANNOUNCEMENTS_KEY) || "[]"));
 let pendingApprovalMessage = "";
 let portalToastTimeout = null;
 
@@ -699,26 +701,28 @@ async function fetchStudentLessonProgress() {
   }
 }
 
-function persistDismissedAnnouncements() {
-  localStorage.setItem(STORAGE_DISMISSED_ANNOUNCEMENTS_KEY, JSON.stringify(Array.from(dismissedAnnouncements)));
+function renderAnnouncements(announcements) {
+  currentAnnouncements = (announcements || []).slice().sort((a, b) => (
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  ));
+  hasLoadedAnnouncements = true;
+  renderAnnouncementViews();
 }
 
-function renderAnnouncements(announcements) {
-  if (!studentAnnouncements || !studentStatusSection) return;
+function renderAnnouncementViews() {
+  if (!designAnnouncement || !studentAnnouncements) return;
 
-  currentAnnouncements = announcements || [];
-  const visibleAnnouncements = (announcements || []).filter((announcement) => {
-    const id = Number(announcement.id);
-    return !Number.isNaN(id) ? !dismissedAnnouncements.has(id) : true;
-  }).slice(0, 3);
+  const latestAnnouncement = currentAnnouncements[0];
+  designAnnouncement.innerHTML = latestAnnouncement
+    ? renderAnnouncementCard(latestAnnouncement, true)
+    : "";
+  studentAnnouncements.innerHTML = currentAnnouncements.length
+    ? currentAnnouncements.map((announcement) => renderAnnouncementCard(announcement)).join("")
+    : '<div class="empty-state">No announcements yet.</div>';
+}
 
-  if (!visibleAnnouncements.length) {
-    studentAnnouncements.innerHTML = '<div class="empty-state">No announcements yet.</div>';
-    studentStatusSection.hidden = false;
-    return;
-  }
-
-  studentAnnouncements.innerHTML = visibleAnnouncements.map((announcement) => `
+function renderAnnouncementCard(announcement, showViewAllLink = false) {
+  return `
     <article class="announcement-card" data-announcement-id="${announcement.id}">
       <div class="announcement-card__header">
         <div class="announcement-card__title-wrap">
@@ -753,14 +757,9 @@ function renderAnnouncements(announcements) {
         >Comments (${announcementCommentCounts.get(String(announcement.id)) || 0})</button>
       </div>
       ${renderAnnouncementComments(announcement)}
-      <div class="announcement-card__actions">
-        <button class="announcement-card__toggle" type="button" data-announcement-action="toggle" data-announcement-id="${announcement.id}">Hide</button>
-        <button class="announcement-card__dismiss" type="button" data-announcement-action="dismiss" data-announcement-id="${announcement.id}">Dismiss</button>
-      </div>
+      ${showViewAllLink ? '<a class="announcement-card__view-all" href="#" data-announcement-action="view-all">View all announcements</a>' : ""}
     </article>
-  `).join("");
-
-  studentStatusSection.hidden = false;
+  `;
 }
 
 function renderAnnouncementComments(announcement) {
@@ -810,8 +809,15 @@ async function loadAnnouncementEngagement(announcements) {
   const ids = (announcements || []).map((announcement) => announcement.id);
   const engagementByAnnouncement = new Map(ids.map((id) => [String(id), { count: 0, liked: false }]));
   const likeMutationVersion = announcementLikeMutationVersion;
-  announcementCommentCounts = new Map(ids.map((id) => [String(id), 0]));
-  if (!ids.length || !supabaseClient) return;
+  const commentMutationVersion = announcementCommentMutationVersion;
+  const commentCountByAnnouncement = new Map(ids.map((id) => [String(id), 0]));
+  if (!ids.length || !supabaseClient) {
+    announcementCommentCounts = commentCountByAnnouncement;
+    if (likeMutationVersion === announcementLikeMutationVersion) {
+      announcementEngagement = engagementByAnnouncement;
+    }
+    return;
+  }
 
   const [likesResult, commentsResult] = await Promise.all([
     supabaseClient
@@ -820,7 +826,7 @@ async function loadAnnouncementEngagement(announcements) {
       .in("announcement_id", ids),
     supabaseClient
       .from("announcement_comments")
-      .select("announcement_id")
+      .select("id, announcement_id")
       .in("announcement_id", ids)
   ]);
 
@@ -843,12 +849,17 @@ async function loadAnnouncementEngagement(announcements) {
   if (likeMutationVersion === announcementLikeMutationVersion && !busyAnnouncementLikes.size) {
     announcementEngagement = engagementByAnnouncement;
   }
-  (commentsResult.data || []).forEach(({ announcement_id: id }) => {
-    const key = String(id);
-    if (announcementCommentCounts.has(key)) {
-      announcementCommentCounts.set(key, announcementCommentCounts.get(key) + 1);
-    }
+  const commentIdsByAnnouncement = new Map(ids.map((id) => [String(id), new Set()]));
+  (commentsResult.data || []).forEach(({ id, announcement_id: announcementId }) => {
+    const key = String(announcementId);
+    if (commentIdsByAnnouncement.has(key)) commentIdsByAnnouncement.get(key).add(String(id));
   });
+  commentIdsByAnnouncement.forEach((commentIds, key) => {
+    commentCountByAnnouncement.set(key, commentIds.size);
+  });
+  if (commentMutationVersion === announcementCommentMutationVersion) {
+    announcementCommentCounts = commentCountByAnnouncement;
+  }
 }
 
 async function loadAnnouncementComments(announcementId) {
@@ -858,7 +869,16 @@ async function loadAnnouncementComments(announcementId) {
     .eq("announcement_id", announcementId)
     .order("created_at", { ascending: true });
   if (error) throw error;
-  announcementComments.set(String(announcementId), data || []);
+  const key = String(announcementId);
+  const mergedComments = new Map((data || []).map((comment) => [String(comment.id), comment]));
+  (announcementComments.get(key) || []).forEach((comment) => {
+    if (!mergedComments.has(String(comment.id))) mergedComments.set(String(comment.id), comment);
+  });
+  const comments = Array.from(mergedComments.values()).sort((a, b) => (
+    new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  ));
+  announcementComments.set(key, comments);
+  announcementCommentCounts.set(key, comments.length);
 }
 
 async function fetchAnnouncements() {
@@ -868,8 +888,7 @@ async function fetchAnnouncements() {
     const { data, error } = await supabaseClient
       .from("announcements")
       .select("id, title, message, created_at")
-      .order("created_at", { ascending: false })
-      .limit(3);
+      .order("created_at", { ascending: false });
 
     if (error) throw error;
     try {
@@ -882,6 +901,7 @@ async function fetchAnnouncements() {
   } catch (error) {
     console.error("Failed to fetch announcements:", error);
     renderAnnouncements([]);
+    hasLoadedAnnouncements = false;
   }
 }
 
@@ -1357,7 +1377,13 @@ function handleRecordedLessonAction(event) {
 
 function handleAnnouncementCardAction(event) {
   const button = event.target.closest("[data-announcement-action]");
-  if (!button || !studentAnnouncements?.contains(button)) return;
+  if (!button || !designAnnouncement?.contains(button) && !studentAnnouncements?.contains(button)) return;
+
+  if (button.dataset.announcementAction === "view-all") {
+    event.preventDefault();
+    portalTabs.find((tab) => tab.dataset.tab === "announcements")?.click();
+    return;
+  }
 
   const announcementId = Number(button.dataset.announcementId);
   if (!Number.isFinite(announcementId)) return;
@@ -1380,19 +1406,6 @@ function handleAnnouncementCardAction(event) {
     return;
   }
 
-  if (button.dataset.announcementAction === "dismiss") {
-    dismissedAnnouncements.add(announcementId);
-    persistDismissedAnnouncements();
-    fetchAnnouncements();
-    return;
-  }
-
-  const body = card.querySelector(".announcement-card__body");
-  if (!body) return;
-
-  const isHidden = body.hidden;
-  body.hidden = !isHidden;
-  button.textContent = isHidden ? "Hide" : "Show";
 }
 
 async function toggleAnnouncementLike(announcementId) {
@@ -1436,12 +1449,12 @@ async function toggleAnnouncementComments(announcementId) {
   const key = String(announcementId);
   if (expandedAnnouncementComments.has(key)) {
     expandedAnnouncementComments.delete(key);
-    renderAnnouncements(currentAnnouncements);
+    renderAnnouncementViews();
     return;
   }
 
   expandedAnnouncementComments.add(key);
-  renderAnnouncements(currentAnnouncements);
+  renderAnnouncementViews();
   if (announcementComments.has(key) || loadingAnnouncementComments.has(key)) return;
 
   loadingAnnouncementComments.add(key);
@@ -1452,28 +1465,36 @@ async function toggleAnnouncementComments(announcementId) {
     showPortalToast("Unable to load comments. Please try again.");
   } finally {
     loadingAnnouncementComments.delete(key);
-    renderAnnouncements(currentAnnouncements);
+    renderAnnouncementViews();
   }
 }
 
 async function handleAnnouncementCommentSubmit(event) {
   const form = event.target.closest(".announcement-comment-form");
-  if (!form || !studentAnnouncements?.contains(form)) return;
+  if (!form || !designAnnouncement?.contains(form) && !studentAnnouncements?.contains(form)) return;
   event.preventDefault();
+  if (busyAnnouncementComments.has(String(form.dataset.announcementId))) return;
 
   const announcementId = Number(form.dataset.announcementId);
   const textarea = form.elements.body;
   const body = textarea.value.trim();
   const key = String(announcementId);
-  if (!Number.isFinite(announcementId) || !body || body.length > 500 || busyAnnouncementComments.has(key)) {
+  if (!Number.isFinite(announcementId) || !body || body.length > 500) {
     if (!body) showPortalToast("Write a comment before posting.");
     else if (body.length > 500) showPortalToast("Comments must be 500 characters or fewer.");
     return;
   }
 
-  const postButton = form.querySelector('[type="submit"]');
   busyAnnouncementComments.add(key);
-  if (postButton) postButton.disabled = true;
+  announcementCommentMutationVersion += 1;
+  [designAnnouncement, studentAnnouncements].forEach((container) => {
+    container?.querySelectorAll(".announcement-comment-form").forEach((commentForm) => {
+      if (commentForm.dataset.announcementId === key) {
+        const submitButton = commentForm.querySelector('[type="submit"]');
+        if (submitButton) submitButton.disabled = true;
+      }
+    });
+  });
   let commentPosted = false;
 
   try {
@@ -1485,18 +1506,34 @@ async function handleAnnouncementCommentSubmit(event) {
       .single();
     if (error) throw error;
 
-    const comments = announcementComments.get(key) || [];
-    comments.push(data);
-    announcementComments.set(key, comments);
-    announcementCommentCounts.set(key, (announcementCommentCounts.get(key) || 0) + 1);
+    const comments = announcementComments.get(key);
+    if (comments) {
+      if (!comments.some((comment) => String(comment.id) === String(data.id))) {
+        comments.push(data);
+        comments.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      }
+      announcementCommentCounts.set(key, comments.length);
+    } else {
+      announcementCommentCounts.set(key, (announcementCommentCounts.get(key) || 0) + 1);
+    }
     commentPosted = true;
   } catch (error) {
     console.error("Failed to post announcement comment:", error);
     showPortalToast("Unable to post your comment. Please try again.");
-    if (postButton) postButton.disabled = false;
   } finally {
     busyAnnouncementComments.delete(key);
-    if (commentPosted) renderAnnouncements(currentAnnouncements);
+    if (commentPosted) {
+      renderAnnouncementViews();
+    } else {
+      [designAnnouncement, studentAnnouncements].forEach((container) => {
+        container?.querySelectorAll(".announcement-comment-form").forEach((commentForm) => {
+          if (commentForm.dataset.announcementId === key) {
+            const submitButton = commentForm.querySelector('[type="submit"]');
+            if (submitButton) submitButton.disabled = false;
+          }
+        });
+      });
+    }
   }
 }
 
@@ -1506,6 +1543,7 @@ async function deleteStudentAnnouncementComment(announcementId, commentId) {
   const comment = comments.find((item) => String(item.id) === String(commentId));
   if (!comment || comment.student_id !== currentStudentId) return;
 
+  announcementCommentMutationVersion += 1;
   try {
     const { error } = await supabaseClient
       .from("announcement_comments")
@@ -1514,9 +1552,10 @@ async function deleteStudentAnnouncementComment(announcementId, commentId) {
       .eq("student_id", currentStudentId);
     if (error) throw error;
 
-    announcementComments.set(key, comments.filter((item) => String(item.id) !== String(commentId)));
-    announcementCommentCounts.set(key, Math.max(0, (announcementCommentCounts.get(key) || 0) - 1));
-    renderAnnouncements(currentAnnouncements);
+    const updatedComments = comments.filter((item) => String(item.id) !== String(commentId));
+    announcementComments.set(key, updatedComments);
+    announcementCommentCounts.set(key, updatedComments.length);
+    renderAnnouncementViews();
   } catch (error) {
     console.error("Failed to delete announcement comment:", error);
     showPortalToast("Unable to delete your comment. Please try again.");
@@ -1525,7 +1564,7 @@ async function deleteStudentAnnouncementComment(announcementId, commentId) {
 
 function handleAnnouncementCommentInput(event) {
   const textarea = event.target.closest(".announcement-comment-form__input");
-  if (!textarea || !studentAnnouncements?.contains(textarea)) return;
+  if (!textarea || !designAnnouncement?.contains(textarea) && !studentAnnouncements?.contains(textarea)) return;
   const counter = textarea.closest(".announcement-comment-form").querySelector("[data-comment-counter]");
   if (counter) counter.textContent = `${textarea.value.length} / 500`;
 }
@@ -1563,8 +1602,9 @@ function handleTabClick(event) {
   if (recordedLessonsSection) recordedLessonsSection.hidden = !isVideosTab;
 
   if (studentStatusSection) {
-    studentStatusSection.hidden = !isLessonsTab && !isAnnouncementsTab;
+    studentStatusSection.hidden = !isLessonsTab;
   }
+  if (announcementsSection) announcementsSection.hidden = !isAnnouncementsTab;
 
   if (placeholderContent) {
     placeholderContent.hidden = isLessonsTab || isVideosTab || isAnnouncementsTab;
@@ -1588,7 +1628,7 @@ function handleTabClick(event) {
     }
   }
 
-  if (isAnnouncementsTab && studentAnnouncements) {
+  if (isAnnouncementsTab && !hasLoadedAnnouncements) {
     fetchAnnouncements();
   }
 }
@@ -1651,11 +1691,12 @@ function attachEvents() {
     recordedLessonsContainer.addEventListener("click", handleRecordedLessonAction);
   }
 
-  if (studentAnnouncements) {
-    studentAnnouncements.addEventListener("click", handleAnnouncementCardAction);
-    studentAnnouncements.addEventListener("submit", handleAnnouncementCommentSubmit);
-    studentAnnouncements.addEventListener("input", handleAnnouncementCommentInput);
-  }
+  [designAnnouncement, studentAnnouncements].forEach((container) => {
+    if (!container) return;
+    container.addEventListener("click", handleAnnouncementCardAction);
+    container.addEventListener("submit", handleAnnouncementCommentSubmit);
+    container.addEventListener("input", handleAnnouncementCommentInput);
+  });
 
   if (themeToggleBtn) {
     themeToggleBtn.addEventListener("click", toggleTheme);

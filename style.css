@@ -606,32 +606,17 @@ select {
   white-space: pre-wrap;
 }
 
-.announcement-card__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.announcement-card__toggle,
-.announcement-card__dismiss {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 7px 12px;
+.announcement-card__view-all {
+  align-self: flex-start;
+  color: var(--primary);
+  font-size: 0.9rem;
   font-weight: 700;
-  cursor: pointer;
-  transition: color 180ms ease, background-color 180ms ease, border-color 180ms ease;
+  text-decoration: none;
 }
 
-.announcement-card__toggle {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-.announcement-card__dismiss {
-  background: var(--danger-soft);
-  color: var(--danger-soft-text);
+.announcement-card__view-all:hover {
+  color: var(--primary-hover);
+  text-decoration: underline;
 }
 
 .admin-announcements-list {
