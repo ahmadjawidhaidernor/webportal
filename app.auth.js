@@ -1096,7 +1096,34 @@ async function openPreviewModal(fileUrl, fileName, lessonId) {
 
     if (["pdf"].includes(extension)) {
       const previewUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(resolvedUrl)}&embedded=true`;
-      previewModalBody.innerHTML = `<iframe class="preview-frame" src="${previewUrl}" title="PDF preview"></iframe>`;
+      previewModalBody.innerHTML = `
+        <iframe class="preview-frame" title="PDF preview"></iframe>
+        <div class="preview-panel" data-pdf-preview-fallback hidden>
+          PDF preview could not be confirmed. Use Open in New Tab or Download below.
+        </div>
+      `;
+      const pdfFrame = previewModalBody.querySelector(".preview-frame");
+      const pdfFallback = previewModalBody.querySelector("[data-pdf-preview-fallback]");
+      const showPdfFallback = () => {
+        pdfFallback.hidden = false;
+      };
+      let fallbackTimer = window.setTimeout(showPdfFallback, 10000);
+
+      pdfFrame.addEventListener("load", () => {
+        window.clearTimeout(fallbackTimer);
+        fallbackTimer = window.setTimeout(showPdfFallback, 10000);
+      }, { once: true });
+      pdfFrame.addEventListener("error", () => {
+        window.clearTimeout(fallbackTimer);
+        showPdfFallback();
+      }, { once: true });
+      pdfFrame.src = previewUrl;
+      return;
+    }
+
+    if (["pptx", "ppt", "docx", "doc", "xlsx", "xls"].includes(extension)) {
+      const previewUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(resolvedUrl)}`;
+      previewModalBody.innerHTML = `<iframe class="preview-frame" src="${previewUrl}" title="Office document preview"></iframe>`;
       return;
     }
 
