@@ -129,8 +129,35 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function getFileExtension(fileName) {
+  const filePart = String(fileName || "")
+    .split(/[?#]/, 1)[0]
+    .split(/[\\/]/)
+    .pop()
+    .replace(/[^a-zA-Z0-9._-]+$/, "");
+  return filePart.split(".").pop().toLowerCase();
+}
+
+function getFileNameFromUrlOrPath(value) {
+  const filePart = String(value || "").split(/[?#]/, 1)[0].split(/[\\/]/).pop();
+  return filePart || "download";
+}
+
+function parseStoredLessonValue(value) {
+  if (typeof value !== "string") return value;
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return "";
+
+  try {
+    return JSON.parse(trimmedValue);
+  } catch {
+    return trimmedValue;
+  }
+}
+
 function getFileIcon(fileName) {
-  const extension = String(fileName).split('.').pop().toLowerCase();
+  const extension = getFileExtension(fileName);
   if (["png", "jpg", "jpeg", "svg", "gif", "bmp", "webp"].includes(extension)) return "🖼️";
   if (["html", "css", "js", "json", "jsx", "ts", "tsx", "md", "py", "java", "c", "cpp", "cs", "rb", "php"].includes(extension)) return "🌐";
   if (["zip", "rar", "tar", "gz", "7z", "bz2"].includes(extension)) return "📦";
@@ -138,36 +165,32 @@ function getFileIcon(fileName) {
   return "📄";
 }
 
-function normalizeLessonFiles(fileData) {
-  if (!fileData) return [];
+function normalizeLessonFiles(fileData, storagePathData) {
+  const parsedFileData = parseStoredLessonValue(fileData);
+  const parsedStoragePaths = parseStoredLessonValue(storagePathData);
 
-  if (Array.isArray(fileData)) {
-    return fileData
-      .filter((item) => item && (item.url || item.name))
-      .map((item) => {
-        const url = item.url || String(item.name || "").trim();
-        const name = item.name || (url ? url.split("/").pop() : "download");
-        return { url, name };
-      })
-      .filter((item) => item.url);
-  }
+  const normalizeEntry = (item) => {
+    if (typeof item === "string") {
+      const url = item.trim();
+      return url ? { url, name: getFileNameFromUrlOrPath(url) } : null;
+    }
+    if (!item || typeof item !== "object") return null;
 
-  if (typeof fileData === "object" && fileData.url) {
-    return [{
-      url: fileData.url,
-      name: fileData.name || fileData.url.split("/").pop() || "download"
-    }];
-  }
-
-  if (typeof fileData === "string") {
-    const url = fileData.trim() || "#";
-    return [{
+    const url = String(item.url || item.name || "").trim();
+    if (!url) return null;
+    return {
       url,
-      name: url === "#" ? "File unavailable" : url.split("/").pop() || "lesson.pdf"
-    }];
-  }
+      name: String(item.name || getFileNameFromUrlOrPath(url))
+    };
+  };
 
-  return [];
+  const fileEntries = Array.isArray(parsedFileData)
+    ? parsedFileData.map(normalizeEntry).filter(Boolean)
+    : [normalizeEntry(parsedFileData)].filter(Boolean);
+  if (fileEntries.length) return fileEntries;
+
+  const storageEntries = Array.isArray(parsedStoragePaths) ? parsedStoragePaths : [parsedStoragePaths];
+  return storageEntries.map(normalizeEntry).filter(Boolean);
 }
 
 function isFullUrl(value) {
@@ -265,7 +288,7 @@ async function downloadLesson(fileUrl, fileName) {
 }
 
 function createFileList(lesson) {
-  const files = normalizeLessonFiles(lesson.file_url);
+  const files = normalizeLessonFiles(lesson.file_url, lesson.storage_path);
 
   if (!files.length) {
     return `
@@ -732,7 +755,7 @@ async function fetchLessons() {
   try {
     const { data, error } = await supabaseClient
       .from("lessons")
-      .select("id, title, lesson_number, description, file_url, created_at, category")
+      .select("id, title, lesson_number, description, file_url, storage_path, created_at, category")
       .order("lesson_number", { ascending: true });
 
     if (error) throw error;
@@ -1069,7 +1092,7 @@ async function openPreviewModal(fileUrl, fileName, lessonId) {
     if (previewOpenButton) {
       previewOpenButton.href = resolvedUrl;
     }
-    const extension = fileName.split('.').pop().toLowerCase();
+    const extension = getFileExtension(fileName);
 
     if (["pdf"].includes(extension)) {
       const previewUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(resolvedUrl)}&embedded=true`;

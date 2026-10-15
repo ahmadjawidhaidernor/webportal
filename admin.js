@@ -126,6 +126,50 @@ function showLoginScreen() {
   editingLessonId = null;
 }
 
+function parseStoredLessonValue(value) {
+  if (typeof value !== 'string') return value;
+
+  const trimmedValue = value.trim();
+  if (!trimmedValue) return '';
+
+  try {
+    return JSON.parse(trimmedValue);
+  } catch {
+    return trimmedValue;
+  }
+}
+
+function normalizeAdminLessonFiles(fileData) {
+  const parsedFileData = parseStoredLessonValue(fileData);
+  const normalizeEntry = (item) => {
+    if (typeof item === 'string') {
+      const url = item.trim();
+      return url ? { url, name: url.split(/[?#]/, 1)[0].split(/[\\/]/).pop() || 'download' } : null;
+    }
+    if (!item || typeof item !== 'object') return null;
+
+    const url = String(item.url || item.name || '').trim();
+    if (!url) return null;
+    return {
+      url,
+      name: String(item.name || url.split(/[?#]/, 1)[0].split(/[\\/]/).pop() || 'download')
+    };
+  };
+
+  const fileEntries = (Array.isArray(parsedFileData) ? parsedFileData : [parsedFileData])
+    .map(normalizeEntry)
+    .filter(Boolean);
+  return fileEntries;
+}
+
+function normalizeStoragePaths(storagePathData) {
+  const parsedPaths = parseStoredLessonValue(storagePathData);
+  const paths = Array.isArray(parsedPaths) ? parsedPaths : [parsedPaths];
+  return paths
+    .filter((path) => typeof path === 'string' && path.trim())
+    .map((path) => path.trim());
+}
+
 function renderLessons() {
   if (!lessonsTableBody) return;
   if (!lessons.length) {
@@ -138,16 +182,16 @@ function renderLessons() {
     const session = lesson.lesson_number || '-';
     const category = lesson.category || 'General';
     const date = lesson.created_at ? new Date(lesson.created_at).toLocaleDateString('en-US') : '-';
-    const fileList = Array.isArray(lesson.file_url) ? lesson.file_url : lesson.file_url ? [{ url: lesson.file_url }] : [];
+    const fileList = normalizeAdminLessonFiles(lesson.file_url);
     const fileUrl = fileList[0]?.url || '#';
-    const fileLabel = fileList.length > 1 ? `Open ${fileList.length} files` : 'Open file';
+    const fileLabel = escapeHtml(fileList.length > 1 ? `Open ${fileList.length} files` : 'Open file');
     return `
       <tr>
         <td>${title}</td>
         <td>${session}</td>
         <td>${category}</td>
         <td>${date}</td>
-        <td><a href="${fileUrl}" target="_blank" rel="noopener noreferrer">${fileLabel}</a></td>
+        <td><a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer">${fileLabel}</a></td>
         <td>
           <div class="admin-actions">
             <button class="admin-action-btn" type="button" data-action="edit" data-id="${lesson.id}">Edit</button>
@@ -719,7 +763,7 @@ async function saveEditLesson(event) {
   try {
     if (replacementFiles.length) {
       const lesson = lessons.find((item) => item.id === editingLessonId);
-      oldStoragePaths = Array.isArray(lesson.storage_path) ? lesson.storage_path : lesson.storage_path ? [lesson.storage_path] : [];
+      oldStoragePaths = normalizeStoragePaths(lesson.storage_path);
 
       const uploadResult = await uploadFilesToStorage(replacementFiles);
       uploadedPaths = uploadResult.uploadedPaths;
@@ -767,8 +811,10 @@ async function deleteLesson(id) {
 
   try {
     if (lesson.storage_path) {
-      const storagePaths = Array.isArray(lesson.storage_path) ? lesson.storage_path : [lesson.storage_path];
-      await supabaseClient.storage.from('lessons').remove(storagePaths);
+      const storagePaths = normalizeStoragePaths(lesson.storage_path);
+      if (storagePaths.length) {
+        await supabaseClient.storage.from('lessons').remove(storagePaths);
+      }
     }
     const { error } = await supabaseClient.from('lessons').delete().eq('id', id);
     if (error) throw error;
