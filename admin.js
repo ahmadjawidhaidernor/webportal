@@ -53,6 +53,8 @@ const announcementsSection = document.getElementById('announcementsSection');
 let lessons = [];
 let lessonVideos = [];
 let announcements = [];
+let announcementLikeCounts = new Map();
+let announcementComments = new Map();
 let editingLessonId = null;
 let currentUser = null;
 
@@ -368,6 +370,25 @@ function renderAnnouncementsList() {
         <span class="admin-announcement-item__meta">${formatRelativeTime(announcement.created_at)}</span>
       </div>
       <p class="admin-announcement-item__message">${escapeHtml(announcement.message || '')}</p>
+      <p class="admin-announcement-item__engagement">
+        Likes: ${announcementLikeCounts.get(String(announcement.id)) || 0}
+        <span aria-hidden="true">•</span>
+        Comments: ${(announcementComments.get(String(announcement.id)) || []).length}
+      </p>
+      <div class="admin-announcement-comments">
+        ${(announcementComments.get(String(announcement.id)) || []).length
+          ? announcementComments.get(String(announcement.id)).map((comment) => `
+            <div class="admin-announcement-comment">
+              <div class="admin-announcement-comment__header">
+                <strong>${escapeHtml(comment.student_name || 'Student')}</strong>
+                <span>${formatRelativeTime(comment.created_at)}</span>
+              </div>
+              <p>${escapeHtml(comment.body)}</p>
+              <button class="admin-action-btn" type="button" data-announcement-action="delete-comment" data-announcement-id="${escapeHtml(announcement.id)}" data-comment-id="${escapeHtml(comment.id)}">Delete comment</button>
+            </div>
+          `).join('')
+          : '<p class="admin-announcement-comment__empty">No comments yet.</p>'}
+      </div>
       <button class="admin-form__submit admin-announcement-item__delete" type="button" data-announcement-action="delete" data-id="${announcement.id}">Delete</button>
     </article>
   `).join('');
@@ -384,6 +405,37 @@ async function loadAnnouncements() {
 
     if (error) throw error;
     announcements = data || [];
+    const announcementIds = announcements.map((announcement) => announcement.id);
+    announcementLikeCounts = new Map(announcementIds.map((id) => [String(id), 0]));
+    announcementComments = new Map(announcementIds.map((id) => [String(id), []]));
+
+    if (announcementIds.length) {
+      const [likesResult, commentsResult] = await Promise.all([
+        supabaseClient
+          .from('announcement_likes')
+          .select('announcement_id')
+          .in('announcement_id', announcementIds),
+        supabaseClient
+          .from('announcement_comments')
+          .select('id, announcement_id, student_id, student_name, body, created_at')
+          .in('announcement_id', announcementIds)
+          .order('created_at', { ascending: true })
+      ]);
+      if (likesResult.error) throw likesResult.error;
+      if (commentsResult.error) throw commentsResult.error;
+
+      (likesResult.data || []).forEach(({ announcement_id: id }) => {
+        const key = String(id);
+        if (announcementLikeCounts.has(key)) {
+          announcementLikeCounts.set(key, announcementLikeCounts.get(key) + 1);
+        }
+      });
+      (commentsResult.data || []).forEach((comment) => {
+        const key = String(comment.announcement_id);
+        if (announcementComments.has(key)) announcementComments.get(key).push(comment);
+      });
+    }
+
     renderAnnouncementsList();
   } catch (error) {
     console.error('Failed to load announcements:', error);
@@ -435,7 +487,34 @@ async function deleteAnnouncement(id) {
   }
 }
 
+async function deleteAnnouncementComment(announcementId, commentId) {
+  if (!supabaseClient || !(await ensureAdminSessionValid())) return;
+  const key = String(announcementId);
+  const comments = announcementComments.get(key) || [];
+  const comment = comments.find((item) => String(item.id) === String(commentId));
+  if (!comment || !window.confirm(`Delete ${comment.student_name || 'this'} student's comment?`)) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from('announcement_comments')
+      .delete()
+      .eq('id', commentId);
+    if (error) throw error;
+    announcementComments.set(key, comments.filter((item) => String(item.id) !== String(commentId)));
+    renderAnnouncementsList();
+  } catch (error) {
+    console.error('Failed to delete announcement comment:', error);
+    showMessage(announcementMessage, error.message || 'Unable to delete comment.', true);
+  }
+}
+
 function handleAnnouncementListClick(event) {
+  const commentButton = event.target.closest('[data-announcement-action="delete-comment"]');
+  if (commentButton) {
+    deleteAnnouncementComment(Number(commentButton.dataset.announcementId), commentButton.dataset.commentId);
+    return;
+  }
+
   const button = event.target.closest('[data-announcement-action="delete"]');
   if (button) {
     deleteAnnouncement(Number(button.dataset.id));

@@ -60,8 +60,18 @@ const STORAGE_DOWNLOADED_KEY = "jsPortalDownloadedFiles";
 const STORAGE_DISMISSED_ANNOUNCEMENTS_KEY = "jsPortalDismissedAnnouncements";
 let authMode = "login";
 let currentStudentId = null;
+let currentStudentEmail = "";
+let currentStudentFullName = "";
 let allLessons = [];
 let allLessonVideos = [];
+let currentAnnouncements = [];
+let announcementEngagement = new Map();
+let announcementCommentCounts = new Map();
+let announcementComments = new Map();
+let expandedAnnouncementComments = new Set();
+let busyAnnouncementLikes = new Set();
+let loadingAnnouncementComments = new Set();
+let busyAnnouncementComments = new Set();
 let activeCategory = "All";
 let activeTab = "lessons";
 let downloadedFiles = new Set(JSON.parse(localStorage.getItem(STORAGE_DOWNLOADED_KEY) || "[]"));
@@ -694,6 +704,7 @@ function persistDismissedAnnouncements() {
 function renderAnnouncements(announcements) {
   if (!studentAnnouncements || !studentStatusSection) return;
 
+  currentAnnouncements = announcements || [];
   const visibleAnnouncements = (announcements || []).filter((announcement) => {
     const id = Number(announcement.id);
     return !Number.isNaN(id) ? !dismissedAnnouncements.has(id) : true;
@@ -715,6 +726,25 @@ function renderAnnouncements(announcements) {
         <span class="announcement-card__meta">${formatRelativeTime(announcement.created_at)}</span>
       </div>
       <p class="announcement-card__body">${escapeHtml(announcement.message || "")}</p>
+      <div class="announcement-card__engagement">
+        <button
+          class="announcement-card__social-button${announcementEngagement.get(String(announcement.id))?.liked ? " announcement-card__social-button--liked" : ""}"
+          type="button"
+          data-announcement-action="like"
+          data-announcement-id="${announcement.id}"
+          aria-pressed="${announcementEngagement.get(String(announcement.id))?.liked ? "true" : "false"}"
+          ${busyAnnouncementLikes.has(String(announcement.id)) ? "disabled" : ""}
+        >${announcementEngagement.get(String(announcement.id))?.liked ? "Liked" : "Like"} (${announcementEngagement.get(String(announcement.id))?.count || 0})</button>
+        <button
+          class="announcement-card__social-button"
+          type="button"
+          data-announcement-action="comments"
+          data-announcement-id="${announcement.id}"
+          aria-expanded="${expandedAnnouncementComments.has(String(announcement.id))}"
+          aria-controls="announcement-comments-${announcement.id}"
+        >Comments (${announcementCommentCounts.get(String(announcement.id)) || 0})</button>
+      </div>
+      ${renderAnnouncementComments(announcement)}
       <div class="announcement-card__actions">
         <button class="announcement-card__toggle" type="button" data-announcement-action="toggle" data-announcement-id="${announcement.id}">Hide</button>
         <button class="announcement-card__dismiss" type="button" data-announcement-action="dismiss" data-announcement-id="${announcement.id}">Dismiss</button>
@@ -723,6 +753,94 @@ function renderAnnouncements(announcements) {
   `).join("");
 
   studentStatusSection.hidden = false;
+}
+
+function renderAnnouncementComments(announcement) {
+  const announcementId = String(announcement.id);
+  if (!expandedAnnouncementComments.has(announcementId)) return "";
+
+  const comments = announcementComments.get(announcementId);
+  const commentsContent = comments
+    ? comments.length
+      ? comments.map((comment) => `
+        <div class="announcement-comment">
+          <div class="announcement-comment__header">
+            <strong class="announcement-comment__name">${escapeHtml(comment.student_name || "Student")}</strong>
+            <span class="announcement-comment__time">${formatRelativeTime(comment.created_at)}</span>
+            ${comment.student_id === currentStudentId ? `<button class="announcement-comment__delete" type="button" data-announcement-action="delete-comment" data-comment-id="${escapeHtml(comment.id)}" data-announcement-id="${escapeHtml(announcementId)}">Delete</button>` : ""}
+          </div>
+          <p class="announcement-comment__body">${escapeHtml(comment.body)}</p>
+        </div>
+      `).join("")
+      : '<p class="announcement-comments__empty">No comments yet.</p>'
+    : '<p class="announcement-comments__loading">Loading comments...</p>';
+
+  return `
+    <section class="announcement-comments" id="announcement-comments-${escapeHtml(announcementId)}" aria-label="Comments">
+      <div class="announcement-comments__list">${commentsContent}</div>
+      <form class="announcement-comment-form" data-announcement-id="${escapeHtml(announcementId)}">
+        <label class="visually-hidden" for="announcement-comment-input-${escapeHtml(announcementId)}">Write a comment</label>
+        <textarea
+          class="announcement-comment-form__input"
+          id="announcement-comment-input-${escapeHtml(announcementId)}"
+          name="body"
+          rows="2"
+          maxlength="500"
+          placeholder="Write a comment..."
+          required
+        ></textarea>
+        <div class="announcement-comment-form__footer">
+          <span class="announcement-comment-form__counter" data-comment-counter>0 / 500</span>
+          <button class="announcement-card__social-button announcement-comment-form__submit" type="submit" ${busyAnnouncementComments.has(announcementId) ? "disabled" : ""}>Post</button>
+        </div>
+      </form>
+    </section>
+  `;
+}
+
+async function loadAnnouncementEngagement(announcements) {
+  const ids = (announcements || []).map((announcement) => announcement.id);
+  announcementEngagement = new Map(ids.map((id) => [String(id), { count: 0, liked: false }]));
+  announcementCommentCounts = new Map(ids.map((id) => [String(id), 0]));
+  if (!ids.length || !supabaseClient) return;
+
+  const [likesResult, commentsResult] = await Promise.all([
+    supabaseClient
+      .from("announcement_likes")
+      .select("announcement_id, student_id")
+      .in("announcement_id", ids),
+    supabaseClient
+      .from("announcement_comments")
+      .select("announcement_id")
+      .in("announcement_id", ids)
+  ]);
+
+  if (likesResult.error) throw likesResult.error;
+  if (commentsResult.error) throw commentsResult.error;
+
+  (likesResult.data || []).forEach((like) => {
+    const key = String(like.announcement_id);
+    const engagement = announcementEngagement.get(key);
+    if (!engagement) return;
+    engagement.count += 1;
+    if (like.student_id === currentStudentId) engagement.liked = true;
+  });
+  (commentsResult.data || []).forEach(({ announcement_id: id }) => {
+    const key = String(id);
+    if (announcementCommentCounts.has(key)) {
+      announcementCommentCounts.set(key, announcementCommentCounts.get(key) + 1);
+    }
+  });
+}
+
+async function loadAnnouncementComments(announcementId) {
+  const { data, error } = await supabaseClient
+    .from("announcement_comments")
+    .select("id, announcement_id, student_id, student_name, body, created_at")
+    .eq("announcement_id", announcementId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  announcementComments.set(String(announcementId), data || []);
 }
 
 async function fetchAnnouncements() {
@@ -736,6 +854,12 @@ async function fetchAnnouncements() {
       .limit(3);
 
     if (error) throw error;
+    try {
+      await loadAnnouncementEngagement(data || []);
+    } catch (engagementError) {
+      console.error("Failed to load announcement reactions:", engagementError);
+      showPortalToast("Unable to load announcement likes and comments.");
+    }
     renderAnnouncements(data || []);
   } catch (error) {
     console.error("Failed to fetch announcements:", error);
@@ -968,6 +1092,8 @@ async function handleLogin(event) {
     }
 
     currentStudentId = user.id;
+    currentStudentEmail = user.email || "";
+    currentStudentFullName = profileData?.full_name?.trim() || "";
     await logActivityEvent(user.id, null, "login");
     setStudentName(profileData?.full_name || "...");
     showPortalScreen();
@@ -1000,6 +1126,8 @@ async function handleLogout() {
   }
 
   currentStudentId = null;
+  currentStudentEmail = "";
+  currentStudentFullName = "";
   showAuthScreen();
   setAuthMode("login");
 }
@@ -1007,6 +1135,8 @@ async function handleLogout() {
 async function handleAuthStateChange(_event, session) {
   if (!session) {
     currentStudentId = null;
+    currentStudentEmail = "";
+    currentStudentFullName = "";
     showAuthScreen();
     return;
   }
@@ -1018,6 +1148,7 @@ async function handleAuthStateChange(_event, session) {
   try {
     const user = session.user;
     currentStudentId = user?.id || null;
+    currentStudentEmail = user?.email || "";
     const { data: profileData, error } = await supabaseClient
       .from("profiles")
       .select("full_name, is_approved")
@@ -1032,6 +1163,7 @@ async function handleAuthStateChange(_event, session) {
     }
 
     currentStudentId = user.id;
+    currentStudentFullName = profileData?.full_name?.trim() || "";
     setStudentName(profileData?.full_name || "...");
     showPortalScreen();
     await Promise.all([fetchLessons(), fetchAnnouncements(), fetchStudentLessonProgress()]);
@@ -1215,6 +1347,21 @@ function handleAnnouncementCardAction(event) {
   const card = button.closest(".announcement-card");
   if (!card) return;
 
+  if (button.dataset.announcementAction === "like") {
+    toggleAnnouncementLike(announcementId);
+    return;
+  }
+
+  if (button.dataset.announcementAction === "comments") {
+    toggleAnnouncementComments(announcementId);
+    return;
+  }
+
+  if (button.dataset.announcementAction === "delete-comment") {
+    deleteStudentAnnouncementComment(announcementId, button.dataset.commentId);
+    return;
+  }
+
   if (button.dataset.announcementAction === "dismiss") {
     dismissedAnnouncements.add(announcementId);
     persistDismissedAnnouncements();
@@ -1228,6 +1375,137 @@ function handleAnnouncementCardAction(event) {
   const isHidden = body.hidden;
   body.hidden = !isHidden;
   button.textContent = isHidden ? "Hide" : "Show";
+}
+
+async function toggleAnnouncementLike(announcementId) {
+  if (!currentStudentId || !supabaseClient) return;
+  const key = String(announcementId);
+  if (busyAnnouncementLikes.has(key)) return;
+
+  const engagement = announcementEngagement.get(key) || { count: 0, liked: false };
+  const previous = { ...engagement };
+  const shouldLike = !engagement.liked;
+  engagement.liked = shouldLike;
+  engagement.count = Math.max(0, engagement.count + (shouldLike ? 1 : -1));
+  announcementEngagement.set(key, engagement);
+  busyAnnouncementLikes.add(key);
+  renderAnnouncements(currentAnnouncements);
+
+  try {
+    const result = shouldLike
+      ? await supabaseClient.from("announcement_likes").insert([{ announcement_id: announcementId }])
+      : await supabaseClient
+        .from("announcement_likes")
+        .delete()
+        .eq("announcement_id", announcementId)
+        .eq("student_id", currentStudentId);
+    if (result.error) throw result.error;
+  } catch (error) {
+    console.error("Failed to update announcement like:", error);
+    announcementEngagement.set(key, previous);
+    showPortalToast("Unable to update your like. Please try again.");
+  } finally {
+    busyAnnouncementLikes.delete(key);
+    renderAnnouncements(currentAnnouncements);
+  }
+}
+
+async function toggleAnnouncementComments(announcementId) {
+  const key = String(announcementId);
+  if (expandedAnnouncementComments.has(key)) {
+    expandedAnnouncementComments.delete(key);
+    renderAnnouncements(currentAnnouncements);
+    return;
+  }
+
+  expandedAnnouncementComments.add(key);
+  renderAnnouncements(currentAnnouncements);
+  if (announcementComments.has(key) || loadingAnnouncementComments.has(key)) return;
+
+  loadingAnnouncementComments.add(key);
+  try {
+    await loadAnnouncementComments(announcementId);
+  } catch (error) {
+    console.error("Failed to load announcement comments:", error);
+    showPortalToast("Unable to load comments. Please try again.");
+  } finally {
+    loadingAnnouncementComments.delete(key);
+    renderAnnouncements(currentAnnouncements);
+  }
+}
+
+async function handleAnnouncementCommentSubmit(event) {
+  const form = event.target.closest(".announcement-comment-form");
+  if (!form || !studentAnnouncements?.contains(form)) return;
+  event.preventDefault();
+
+  const announcementId = Number(form.dataset.announcementId);
+  const textarea = form.elements.body;
+  const body = textarea.value.trim();
+  const key = String(announcementId);
+  if (!Number.isFinite(announcementId) || !body || body.length > 500 || busyAnnouncementComments.has(key)) {
+    if (!body) showPortalToast("Write a comment before posting.");
+    else if (body.length > 500) showPortalToast("Comments must be 500 characters or fewer.");
+    return;
+  }
+
+  const postButton = form.querySelector('[type="submit"]');
+  busyAnnouncementComments.add(key);
+  if (postButton) postButton.disabled = true;
+  let commentPosted = false;
+
+  try {
+    const studentNameForComment = currentStudentFullName || currentStudentEmail.split("@")[0] || "Student";
+    const { data, error } = await supabaseClient
+      .from("announcement_comments")
+      .insert([{ announcement_id: announcementId, student_name: studentNameForComment, body }])
+      .select("id, announcement_id, student_id, student_name, body, created_at")
+      .single();
+    if (error) throw error;
+
+    const comments = announcementComments.get(key) || [];
+    comments.push(data);
+    announcementComments.set(key, comments);
+    announcementCommentCounts.set(key, (announcementCommentCounts.get(key) || 0) + 1);
+    commentPosted = true;
+  } catch (error) {
+    console.error("Failed to post announcement comment:", error);
+    showPortalToast("Unable to post your comment. Please try again.");
+    if (postButton) postButton.disabled = false;
+  } finally {
+    busyAnnouncementComments.delete(key);
+    if (commentPosted) renderAnnouncements(currentAnnouncements);
+  }
+}
+
+async function deleteStudentAnnouncementComment(announcementId, commentId) {
+  const key = String(announcementId);
+  const comments = announcementComments.get(key) || [];
+  const comment = comments.find((item) => String(item.id) === String(commentId));
+  if (!comment || comment.student_id !== currentStudentId) return;
+
+  try {
+    const { error } = await supabaseClient
+      .from("announcement_comments")
+      .delete()
+      .eq("id", commentId)
+      .eq("student_id", currentStudentId);
+    if (error) throw error;
+
+    announcementComments.set(key, comments.filter((item) => String(item.id) !== String(commentId)));
+    announcementCommentCounts.set(key, Math.max(0, (announcementCommentCounts.get(key) || 0) - 1));
+    renderAnnouncements(currentAnnouncements);
+  } catch (error) {
+    console.error("Failed to delete announcement comment:", error);
+    showPortalToast("Unable to delete your comment. Please try again.");
+  }
+}
+
+function handleAnnouncementCommentInput(event) {
+  const textarea = event.target.closest(".announcement-comment-form__input");
+  if (!textarea || !studentAnnouncements?.contains(textarea)) return;
+  const counter = textarea.closest(".announcement-comment-form").querySelector("[data-comment-counter]");
+  if (counter) counter.textContent = `${textarea.value.length} / 500`;
 }
 
 function setTheme(theme) {
@@ -1353,6 +1631,8 @@ function attachEvents() {
 
   if (studentAnnouncements) {
     studentAnnouncements.addEventListener("click", handleAnnouncementCardAction);
+    studentAnnouncements.addEventListener("submit", handleAnnouncementCommentSubmit);
+    studentAnnouncements.addEventListener("input", handleAnnouncementCommentInput);
   }
 
   if (themeToggleBtn) {
