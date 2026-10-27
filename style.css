@@ -1374,8 +1374,7 @@ body.modal-open {
 
 #lessonsContainer.lessons-grid {
   align-items: start;
-  grid-auto-rows: 1px;
-  row-gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 #lessonsContainer > .lesson-card {
@@ -1740,9 +1739,17 @@ body.modal-open {
   .admin-inline-form__row {
     grid-template-columns: 1fr;
   }
+
+  #lessonsContainer.lessons-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 560px) {
+  #lessonsContainer.lessons-grid {
+    grid-template-columns: 1fr;
+  }
+
   .page-shell,
   .admin-shell {
     padding: 18px 14px 32px;

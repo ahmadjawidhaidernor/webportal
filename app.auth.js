@@ -430,45 +430,6 @@ function renderLessons(lessons) {
   }
 
   lessonsContainer.innerHTML = visibleLessons.map(createLessonCard).join("");
-  layoutLessonCards();
-}
-
-function layoutLessonCards() {
-  if (!lessonsContainer) return;
-
-  const cards = Array.from(lessonsContainer.querySelectorAll(":scope > .lesson-card"));
-  if (!cards.length) {
-    lessonsContainer.style.gridTemplateColumns = "";
-    return;
-  }
-
-  lessonsContainer.style.gridTemplateColumns = "";
-  cards.forEach((card) => {
-    card.style.gridColumn = "";
-    card.style.gridRow = "";
-  });
-
-  const gridStyle = window.getComputedStyle(lessonsContainer);
-  const gridTemplateColumns = gridStyle.gridTemplateColumns;
-  if (!gridTemplateColumns || gridTemplateColumns === "none") return;
-
-  lessonsContainer.style.gridTemplateColumns = gridTemplateColumns;
-  const columnCount = gridTemplateColumns.trim().split(/\s+/).length;
-  const rowSize = Number.parseFloat(gridStyle.gridAutoRows) || 1;
-  const cardGap = Number.parseFloat(gridStyle.columnGap) || 0;
-  const columnRows = Array(columnCount).fill(1);
-  const cardHeights = cards.map((card) => card.getBoundingClientRect().height);
-
-  // Keep the sorted DOM order while placing each card in the shortest column.
-  cards.forEach((card, index) => {
-    const column = columnRows.indexOf(Math.min(...columnRows));
-    const rowStart = columnRows[column];
-    const rowSpan = Math.max(1, Math.ceil((cardHeights[index] + cardGap) / rowSize));
-
-    card.style.gridColumn = String(column + 1);
-    card.style.gridRow = `${rowStart} / span ${rowSpan}`;
-    columnRows[column] = rowStart + rowSpan;
-  });
 }
 
 function filterLessons(searchTerm) {
@@ -1670,15 +1631,9 @@ function handleTabClick(event) {
   if (isAnnouncementsTab && !hasLoadedAnnouncements) {
     fetchAnnouncements();
   }
-
-  if (isLessonsTab) {
-    requestAnimationFrame(layoutLessonCards);
-  }
 }
 
 function attachEvents() {
-  window.addEventListener("resize", layoutLessonCards);
-
   if (authForm) {
     authForm.addEventListener("submit", handleAuthSubmit);
   }
