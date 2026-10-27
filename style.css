@@ -1379,6 +1379,8 @@ body.modal-open {
 
 #lessonsContainer > .lesson-card {
   min-height: 0;
+  grid-column: auto !important;
+  grid-row: auto !important;
 }
 
 #lessonsContainer .lesson-card__footer {
