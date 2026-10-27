@@ -1372,6 +1372,18 @@ body.modal-open {
   gap: 12px;
 }
 
+#lessonsContainer.lessons-grid {
+  align-items: start;
+}
+
+#lessonsContainer > .lesson-card {
+  min-height: 0;
+}
+
+#lessonsContainer .lesson-card__footer {
+  margin-top: 0;
+}
+
 .lesson-card__file-list {
   display: flex;
   flex-direction: column;
