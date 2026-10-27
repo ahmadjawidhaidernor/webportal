@@ -190,15 +190,15 @@ function renderLessons() {
     const fileLabel = escapeHtml(fileList.length > 1 ? `Open ${fileList.length} files` : 'Open file');
     return `
       <tr>
-        <td>${title}</td>
-        <td>${session}</td>
-        <td>${category}</td>
-        <td>${date}</td>
+        <td>${escapeHtml(title)}</td>
+        <td>${escapeHtml(session)}</td>
+        <td>${escapeHtml(category)}</td>
+        <td>${escapeHtml(date)}</td>
         <td><a href="${escapeHtml(fileUrl)}" target="_blank" rel="noopener noreferrer">${fileLabel}</a></td>
         <td>
           <div class="admin-actions">
-            <button class="admin-action-btn" type="button" data-action="edit" data-id="${lesson.id}">Edit</button>
-            <button class="admin-action-btn" type="button" data-action="delete" data-id="${lesson.id}">Delete</button>
+            <button class="admin-action-btn" type="button" data-action="edit" data-id="${escapeHtml(lesson.id)}">Edit</button>
+            <button class="admin-action-btn" type="button" data-action="delete" data-id="${escapeHtml(lesson.id)}">Delete</button>
           </div>
         </td>
       </tr>
@@ -243,7 +243,7 @@ function renderVideoLessonOptions() {
   if (!videoLessonInput) return;
   const sortedLessons = lessons.slice().sort((a, b) => Number(a.lesson_number || 0) - Number(b.lesson_number || 0));
   videoLessonInput.innerHTML = sortedLessons.length
-    ? sortedLessons.map((lesson) => `<option value="${lesson.id}">Session ${escapeHtml(lesson.lesson_number || '-')} - ${escapeHtml(lesson.title || 'Untitled lesson')}</option>`).join('')
+    ? sortedLessons.map((lesson) => `<option value="${escapeHtml(lesson.id)}">Session ${escapeHtml(lesson.lesson_number || '-')} - ${escapeHtml(lesson.title || 'Untitled lesson')}</option>`).join('')
     : '<option value="">No lessons available</option>';
 }
 
@@ -266,7 +266,7 @@ function renderVideos() {
     <section class="admin-video-group">
       <h3>Session ${escapeHtml(lesson.lesson_number || '-')} - ${escapeHtml(lesson.title || 'Untitled lesson')}</h3>
       <ul class="admin-activity-list">
-        ${videos.map((video) => `<li class="admin-activity-item"><strong>${escapeHtml(video.title)}</strong><span>${escapeHtml(video.video_url)}</span><button class="admin-action-btn" type="button" data-video-action="delete" data-id="${video.id}">Delete</button></li>`).join('')}
+        ${videos.map((video) => `<li class="admin-activity-item"><strong>${escapeHtml(video.title)}</strong><span>${escapeHtml(video.video_url)}</span><button class="admin-action-btn" type="button" data-video-action="delete" data-id="${escapeHtml(video.id)}">Delete</button></li>`).join('')}
       </ul>
     </section>
   `).join('');
@@ -368,13 +368,13 @@ function renderAnnouncementsList() {
     <article class="admin-announcement-item">
       <div class="admin-announcement-item__header">
         <h3 class="admin-announcement-item__title">${escapeHtml(announcement.title || 'Untitled announcement')}</h3>
-        <span class="admin-announcement-item__meta">${formatRelativeTime(announcement.created_at)}</span>
+        <span class="admin-announcement-item__meta">${escapeHtml(formatRelativeTime(announcement.created_at))}</span>
       </div>
       <p class="admin-announcement-item__message">${escapeHtml(announcement.message || '')}</p>
       <p class="admin-announcement-item__engagement">
-        Likes: ${announcementLikeCounts.get(String(announcement.id)) || 0}
+        Likes: ${escapeHtml(announcementLikeCounts.get(String(announcement.id)) || 0)}
         <span aria-hidden="true">•</span>
-        Comments: ${(announcementComments.get(String(announcement.id)) || []).length}
+        Comments: ${escapeHtml((announcementComments.get(String(announcement.id)) || []).length)}
       </p>
       <p class="admin-announcement-item__liked-by">
         Liked by: ${(announcementLikedBy.get(String(announcement.id)) || []).map((name) => escapeHtml(name)).join(', ') || 'No one yet'}
@@ -385,7 +385,7 @@ function renderAnnouncementsList() {
             <div class="admin-announcement-comment">
               <div class="admin-announcement-comment__header">
                 <strong>${escapeHtml(comment.student_name || 'Student')}</strong>
-                <span>${formatRelativeTime(comment.created_at)}</span>
+                <span>${escapeHtml(formatRelativeTime(comment.created_at))}</span>
               </div>
               <p>${escapeHtml(comment.body)}</p>
               <button class="admin-action-btn" type="button" data-announcement-action="delete-comment" data-announcement-id="${escapeHtml(announcement.id)}" data-comment-id="${escapeHtml(comment.id)}">Delete comment</button>
@@ -393,7 +393,7 @@ function renderAnnouncementsList() {
           `).join('')
           : '<p class="admin-announcement-comment__empty">No comments yet.</p>'}
       </div>
-      <button class="admin-form__submit admin-announcement-item__delete" type="button" data-announcement-action="delete" data-id="${announcement.id}">Delete</button>
+      <button class="admin-form__submit admin-announcement-item__delete" type="button" data-announcement-action="delete" data-id="${escapeHtml(announcement.id)}">Delete</button>
     </article>
   `).join('');
 }
@@ -568,7 +568,7 @@ function renderActivityLessons(lessonStats) {
 
   activityLessonsList.innerHTML = lessonStats.map((entry) => {
     const students = entry.students.length ? entry.students.join(', ') : 'No student activity';
-    return `<li class="admin-activity-item"><strong>${escapeHtml(entry.title)}</strong><span>Viewed: ${entry.views} • Downloaded: ${entry.downloads} • Students: ${escapeHtml(students)}</span></li>`;
+    return `<li class="admin-activity-item"><strong>${escapeHtml(entry.title)}</strong><span>Viewed: ${escapeHtml(entry.views)} • Downloaded: ${escapeHtml(entry.downloads)} • Students: ${escapeHtml(students)}</span></li>`;
   }).join('');
 }
 

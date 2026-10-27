@@ -303,6 +303,7 @@ async function downloadLesson(fileUrl, fileName) {
 
 function createFileList(lesson) {
   const files = normalizeLessonFiles(lesson.file_url, lesson.storage_path);
+  const safeLessonId = escapeHtml(lesson.id ?? "");
 
   if (!files.length) {
     return `
@@ -334,7 +335,7 @@ function createFileList(lesson) {
                   <button
                     class="lesson-card__preview-btn"
                     type="button"
-                    data-lesson-id="${lesson.id ?? ""}"
+                    data-lesson-id="${safeLessonId}"
                     data-preview-url="${safeUrl}"
                     data-preview-name="${safeName}"
                   >
@@ -343,7 +344,7 @@ function createFileList(lesson) {
                   <button
                     class="lesson-card__download-btn"
                     type="button"
-                    data-lesson-id="${lesson.id ?? ""}"
+                    data-lesson-id="${safeLessonId}"
                     data-download-url="${safeUrl}"
                     data-download-name="${safeName}"
                   >
@@ -371,15 +372,15 @@ function createLessonCard(lesson) {
   return `
     <article class="lesson-card">
       <div class="lesson-card__header">
-        <span class="lesson-card__badge">${lessonNumber}</span>
-        <h3 class="lesson-card__title">${title}</h3>
+        <span class="lesson-card__badge">${escapeHtml(lessonNumber)}</span>
+        <h3 class="lesson-card__title">${escapeHtml(title)}</h3>
       </div>
       <div class="lesson-card__meta">
         <div class="lesson-card__meta-row">
-          <div class="lesson-card__date">Uploaded: ${createdAt}</div>
-          <span class="lesson-card__category">${category}</span>
+          <div class="lesson-card__date">Uploaded: ${escapeHtml(createdAt)}</div>
+          <span class="lesson-card__category">${escapeHtml(category)}</span>
         </div>
-        <p class="lesson-card__description">${description}</p>
+        <p class="lesson-card__description">${escapeHtml(description)}</p>
       </div>
       <div class="lesson-card__footer">
         ${fileListHtml}
@@ -411,7 +412,7 @@ function renderRecordedLessons(videos) {
         <h3 class="lesson-card__title">${escapeHtml(lesson.title || "Untitled lesson")}</h3>
       </div>
       <div class="lesson-video-list">
-        ${lessonVideos.map((video) => `<div class="lesson-video-item"><span>${escapeHtml(video.title)}</span><button class="lesson-card__video-btn" type="button" data-video-url="${escapeHtml(video.video_url)}" data-video-id="${video.id}" data-lesson-id="${lesson.id}">🎬 Watch</button></div>`).join("")}
+        ${lessonVideos.map((video) => `<div class="lesson-video-item"><span>${escapeHtml(video.title)}</span><button class="lesson-card__video-btn" type="button" data-video-url="${escapeHtml(video.video_url)}" data-video-id="${escapeHtml(video.id)}" data-lesson-id="${escapeHtml(lesson.id)}">🎬 Watch</button></div>`).join("")}
       </div>
     </article>
   `).join("");
@@ -723,13 +724,13 @@ function renderAnnouncementViews() {
 
 function renderAnnouncementCard(announcement, showViewAllLink = false) {
   return `
-    <article class="announcement-card" data-announcement-id="${announcement.id}">
+    <article class="announcement-card" data-announcement-id="${escapeHtml(announcement.id)}">
       <div class="announcement-card__header">
         <div class="announcement-card__title-wrap">
           <span class="hero__eyebrow">Update</span>
           <h3 class="announcement-card__title">${escapeHtml(announcement.title || "Announcement")}</h3>
         </div>
-        <span class="announcement-card__meta">${formatRelativeTime(announcement.created_at)}</span>
+        <span class="announcement-card__meta">${escapeHtml(formatRelativeTime(announcement.created_at))}</span>
       </div>
       <p class="announcement-card__body">${escapeHtml(announcement.message || "")}</p>
       <div class="announcement-card__engagement">
@@ -737,7 +738,7 @@ function renderAnnouncementCard(announcement, showViewAllLink = false) {
           class="announcement-card__like-button${announcementEngagement.get(String(announcement.id))?.liked ? " announcement-card__like-button--liked" : ""}${animatingAnnouncementLikes.has(String(announcement.id)) ? " announcement-card__like-button--animating" : ""}"
           type="button"
           data-announcement-action="like"
-          data-announcement-id="${announcement.id}"
+          data-announcement-id="${escapeHtml(announcement.id)}"
           aria-label="${announcementEngagement.get(String(announcement.id))?.liked ? "Unlike" : "Like"}"
           aria-pressed="${announcementEngagement.get(String(announcement.id))?.liked ? "true" : "false"}"
           ${busyAnnouncementLikes.has(String(announcement.id)) ? "disabled" : ""}
@@ -745,16 +746,16 @@ function renderAnnouncementCard(announcement, showViewAllLink = false) {
           <svg class="announcement-card__heart" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"></path>
           </svg>
-          <span class="announcement-card__like-count">${announcementEngagement.get(String(announcement.id))?.count || 0}</span>
+          <span class="announcement-card__like-count">${escapeHtml(announcementEngagement.get(String(announcement.id))?.count || 0)}</span>
         </button>
         <button
           class="announcement-card__social-button"
           type="button"
           data-announcement-action="comments"
-          data-announcement-id="${announcement.id}"
-          aria-expanded="${expandedAnnouncementComments.has(String(announcement.id))}"
-          aria-controls="announcement-comments-${announcement.id}"
-        >Comments (${announcementCommentCounts.get(String(announcement.id)) || 0})</button>
+          data-announcement-id="${escapeHtml(announcement.id)}"
+          aria-expanded="${escapeHtml(expandedAnnouncementComments.has(String(announcement.id)))}"
+          aria-controls="announcement-comments-${escapeHtml(announcement.id)}"
+        >Comments (${escapeHtml(announcementCommentCounts.get(String(announcement.id)) || 0)})</button>
       </div>
       ${renderAnnouncementComments(announcement)}
       ${showViewAllLink ? '<a class="announcement-card__view-all" href="#" data-announcement-action="view-all">View all announcements</a>' : ""}
@@ -773,7 +774,7 @@ function renderAnnouncementComments(announcement) {
         <div class="announcement-comment">
           <div class="announcement-comment__header">
             <strong class="announcement-comment__name">${escapeHtml(comment.student_name || "Student")}</strong>
-            <span class="announcement-comment__time">${formatRelativeTime(comment.created_at)}</span>
+            <span class="announcement-comment__time">${escapeHtml(formatRelativeTime(comment.created_at))}</span>
             ${comment.student_id === currentStudentId ? `<button class="announcement-comment__delete" type="button" data-announcement-action="delete-comment" data-comment-id="${escapeHtml(comment.id)}" data-announcement-id="${escapeHtml(announcementId)}">Delete</button>` : ""}
           </div>
           <p class="announcement-comment__body">${escapeHtml(comment.body)}</p>
@@ -981,8 +982,8 @@ function renderCategoryFilters(categories) {
     .map((category) => {
       const isActive = category.toLowerCase() === selectedCategory;
       return `
-      <button class="lesson-filter${isActive ? ' lesson-filter--active' : ''}" type="button" data-category="${category}">
-        ${category}
+      <button class="lesson-filter${isActive ? ' lesson-filter--active' : ''}" type="button" data-category="${escapeHtml(category)}">
+        ${escapeHtml(category)}
       </button>
     `;
     })
@@ -1293,12 +1294,12 @@ async function openPreviewModal(fileUrl, fileName, lessonId) {
 
     if (["pptx", "ppt", "docx", "doc", "xlsx", "xls"].includes(extension)) {
       const previewUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(resolvedUrl)}`;
-      previewModalBody.innerHTML = `<iframe class="preview-frame" src="${previewUrl}" title="Office document preview"></iframe>`;
+      previewModalBody.innerHTML = `<iframe class="preview-frame" src="${escapeHtml(previewUrl)}" title="Office document preview"></iframe>`;
       return;
     }
 
     if (["png", "jpg", "jpeg", "svg", "gif", "bmp", "webp"].includes(extension)) {
-      previewModalBody.innerHTML = `<div class="preview-panel"><img class="preview-image" src="${resolvedUrl}" alt="Preview ${fileName}" /></div>`;
+      previewModalBody.innerHTML = `<div class="preview-panel"><img class="preview-image" src="${escapeHtml(resolvedUrl)}" alt="Preview ${escapeHtml(fileName)}" /></div>`;
       return;
     }
 
@@ -1331,7 +1332,7 @@ async function openVideoModal(videoUrl, lessonId, videoTitle = 'Lesson video') {
   }
 
   previewModalTitle.textContent = videoTitle || 'Lesson video';
-  previewModalBody.innerHTML = `<iframe class="preview-frame video-frame" src="https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1" title="Lesson video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+  previewModalBody.innerHTML = `<iframe class="preview-frame video-frame" src="https://www.youtube.com/embed/${escapeHtml(videoId)}?rel=0&modestbranding=1" title="Lesson video" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
   previewModal.hidden = false;
   document.body.classList.add("modal-open");
   if (previewOpenButton) previewOpenButton.hidden = true;
