@@ -1374,6 +1374,8 @@ body.modal-open {
 
 #lessonsContainer.lessons-grid {
   align-items: start;
+  grid-auto-rows: 1px;
+  row-gap: 0;
 }
 
 #lessonsContainer > .lesson-card {
